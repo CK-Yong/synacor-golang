@@ -12,6 +12,8 @@ type VirtualMachine struct {
 	register [8]uint16
 	// Unbounded stack
 	stack []uint16
+	// Program counter
+	index uint16
 }
 
 func Load(file *os.File) (*VirtualMachine, error) {
@@ -30,13 +32,12 @@ func Load(file *os.File) (*VirtualMachine, error) {
 }
 
 func (vm *VirtualMachine) Run() error {
-	index := 0
 	for {
-		op := vm.memory[index][0]
+		op := vm.memory[vm.index][0]
 
 		// Prepare operands, get from registry if necessary
-		operands := make([]uint16, len(vm.memory[index])-1)
-		for i, operand := range vm.memory[index][1:] {
+		operands := make([]uint16, len(vm.memory[vm.index])-1)
+		for i, operand := range vm.memory[vm.index][1:] {
 			val := vm.checkRegister(operand)
 			operands[i] = val
 		}
@@ -44,32 +45,35 @@ func (vm *VirtualMachine) Run() error {
 		switch op {
 		case 0: // stop
 			return nil
+		case 1:
+			vm.set(operands[0], operands[1])
+			break
 		case 6: // jmp
-			// New index - 1 (zero based)
-			index = int(operands[0])
+			vm.index = operands[0]
+			break
+		case 7:
+			vm.jt(operands[0], operands[1])
 			break
 		case 8:
-			index = jf(index, operands[0], operands[1])
+			vm.jf(operands[0], operands[1])
 			break
 		case 9:
 			vm.add(operands[0], operands[1], operands[2])
-			index++
 			break
 		case 19:
-			out(operands[0])
-			index++
+			vm.out(operands[0])
 			break
 		case 21: // no-op
-			index++
+			vm.index++
 			break
 		default:
-			index++
+			vm.index++
 		}
 	}
 }
 
 func (vm *VirtualMachine) checkRegister(arg uint16) uint16 {
-	if arg > 32768 && arg <= 32775 { // Is within register values
+	if arg >= 32768 && arg <= 32775 { // Is within register values
 		index := arg - 32768
 		return vm.register[index]
 	}
@@ -80,18 +84,34 @@ func (vm *VirtualMachine) checkRegister(arg uint16) uint16 {
 // assign into <a> the sum of <b> and <c> (modulo 32768)
 func (vm *VirtualMachine) add(a uint16, b uint16, c uint16) {
 	vm.register[a] = (b + c) % 32768
+	vm.index++
 }
 
-/*
-if <a> is zero, jump to <b>. Returns the destination index
-*/
-func jf(currentIndex int, a uint16, b uint16) int {
-	if a == 0 {
-		return int(b)
+// set register <a> to the value of <b>
+func (vm *VirtualMachine) set(a uint16, b uint16) {
+	vm.register[a] = b
+	vm.index++
+}
+
+// if <a> is nonzero, jump to <b>
+func (vm *VirtualMachine) jt(a uint16, b uint16) {
+	if a != 0 {
+		vm.index = b
+		return
 	}
-	return currentIndex + 1 // return the next index
+	vm.index++
 }
 
-func out(arg uint16) {
+// if <a> is zero, jump to <b>. Returns the destination index
+func (vm *VirtualMachine) jf(a uint16, b uint16) {
+	if a == 0 {
+		vm.index = b
+		return
+	}
+	vm.index++
+}
+
+func (vm *VirtualMachine) out(arg uint16) {
 	fmt.Printf("%c", arg)
+	vm.index++
 }
