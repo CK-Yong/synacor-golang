@@ -22,8 +22,12 @@ func main() {
 		}
 	}(file)
 
-	vm := VirtualMachine.Initialize()
-	vm.Execute(file)
+	vm, err := VirtualMachine.Load(file)
+	if err != nil {
+		panic(err)
+	}
+
+	err = vm.Run()
 
 	if err != nil {
 		panic("Error occurred during execution" + err.Error())

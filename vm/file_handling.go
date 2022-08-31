@@ -7,74 +7,8 @@ import (
 	"os"
 )
 
-type VirtualMachine struct {
-	memory     map[int16]uint16
-	register   [8]uint16
-	stack      []uint16
-	fileOffset int
-}
-
-func Initialize() VirtualMachine {
-	return VirtualMachine{
-		memory:     make(map[int16]uint16),
-		register:   [8]uint16{},
-		stack:      make([]uint16, 32),
-		fileOffset: 0,
-	}
-}
-
-func (vm *VirtualMachine) Execute(file *os.File) error {
-	_, err := file.Seek(0, 0)
-	if err != nil {
-		return err
-	}
-
-	program := toExecutionSet(file)
-
+func (vm *VirtualMachine) load(file *os.File) error {
 	index := 0
-	for {
-		op := program[index][0]
-		operands := make([]uint16, len(program[index])-1)
-
-		for i, operand := range program[index][1:] {
-			val := vm.checkRegister(operand)
-			operands[i] = val
-		}
-
-		switch op {
-		case 0:
-			return nil
-		case 6: // jmp
-			// New index - 1 (zero based) and - 1 to cater for the next increment
-			index = int(operands[0]) - 2
-			break
-		case 19:
-			out(operands[0])
-			break
-		case 21:
-			break
-		}
-		index++
-	}
-
-	return nil
-}
-
-func out(arg uint16) {
-	fmt.Printf("%c", arg)
-}
-
-func (vm *VirtualMachine) checkRegister(arg uint16) uint16 {
-	if arg > 32768 && arg <= 32775 { // Is within register values
-		index := arg - 32768
-		return vm.register[index]
-	}
-
-	return arg
-}
-
-func toExecutionSet(file *os.File) [][]uint16 {
-	program := make([][]uint16, 0)
 	var args []uint16
 	for {
 		op, err := readInt(file)
@@ -82,9 +16,9 @@ func toExecutionSet(file *os.File) [][]uint16 {
 		if err != nil {
 			if err.Error() == "EOF" {
 				fmt.Println("Successfully loaded file...")
-				break
+				return nil
 			} else {
-				panic(err)
+				return err
 			}
 		}
 
@@ -160,10 +94,9 @@ func toExecutionSet(file *os.File) [][]uint16 {
 			break
 		}
 
-		program = append(program, createOpSlice(op, args...))
+		vm.memory[index] = createOpSlice(op, args...)
+		index++
 	}
-
-	return program
 }
 
 func createOpSlice(op uint16, args ...uint16) []uint16 {
