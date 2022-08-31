@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/ckyong/synacor/VirtualMachine"
+	"github.com/ckyong/synacor/vm"
 	"os"
 	"path/filepath"
 )
