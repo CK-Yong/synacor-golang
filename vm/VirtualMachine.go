@@ -31,15 +31,30 @@ func (vm *VirtualMachine) Execute(file *os.File) error {
 
 	program := toExecutionSet(file)
 
-	for _, operands := range program {
-		op := operands[0]
+	index := 0
+	for {
+		op := program[index][0]
+		operands := make([]uint16, len(program[index])-1)
+
+		for i, operand := range program[index][1:] {
+			val := vm.checkRegister(operand)
+			operands[i] = val
+		}
 
 		switch op {
 		case 0:
 			return nil
+		case 6: // jmp
+			// New index - 1 (zero based) and - 1 to cater for the next increment
+			index = int(operands[0]) - 2
+			break
 		case 19:
-			out(operands[1])
+			out(operands[0])
+			break
+		case 21:
+			break
 		}
+		index++
 	}
 
 	return nil
@@ -47,6 +62,15 @@ func (vm *VirtualMachine) Execute(file *os.File) error {
 
 func out(arg uint16) {
 	fmt.Printf("%c", arg)
+}
+
+func (vm *VirtualMachine) checkRegister(arg uint16) uint16 {
+	if arg > 32768 && arg <= 32775 { // Is within register values
+		index := arg - 32768
+		return vm.register[index]
+	}
+
+	return arg
 }
 
 func toExecutionSet(file *os.File) [][]uint16 {
@@ -57,7 +81,7 @@ func toExecutionSet(file *os.File) [][]uint16 {
 
 		if err != nil {
 			if err.Error() == "EOF" {
-				fmt.Println(err)
+				fmt.Println("Successfully loaded file...")
 				break
 			} else {
 				panic(err)
