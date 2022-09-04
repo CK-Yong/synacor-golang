@@ -11,16 +11,24 @@ type VirtualMachine struct {
 	// Register set with 8 slots
 	register [8]uint16
 	// Unbounded stack
-	stack []uint16
+	stack Stack
 	// Program counter
 	index uint16
+}
+
+type Stack struct {
+	inner []uint16
+}
+
+func (stack *Stack) push(arg uint16) {
+	stack.inner = append(stack.inner, arg)
 }
 
 func Load(file *os.File) (*VirtualMachine, error) {
 	vm := VirtualMachine{
 		memory:   [32768][]uint16{},
 		register: [8]uint16{},
-		stack:    make([]uint16, 32),
+		stack:    Stack{inner: []uint16{}},
 	}
 	err := vm.load(file)
 
@@ -49,7 +57,7 @@ func (vm *VirtualMachine) Run() error {
 			vm.set(operands[0], operands[1])
 			break
 		case 6: // jmp
-			vm.index = operands[0]
+			vm.jmp(operands[0])
 			break
 		case 7:
 			vm.jt(operands[0], operands[1])
@@ -60,6 +68,9 @@ func (vm *VirtualMachine) Run() error {
 		case 9:
 			vm.add(operands[0], operands[1], operands[2])
 			break
+		case 17:
+			vm.call(operands[0])
+			break
 		case 19:
 			vm.out(operands[0])
 			break
@@ -67,6 +78,7 @@ func (vm *VirtualMachine) Run() error {
 			vm.index++
 			break
 		default:
+			fmt.Printf("Unknown operation: %v at index %v\n", op, vm.index)
 			vm.index++
 		}
 	}
@@ -96,7 +108,7 @@ func (vm *VirtualMachine) set(a uint16, b uint16) {
 // if <a> is nonzero, jump to <b>
 func (vm *VirtualMachine) jt(a uint16, b uint16) {
 	if a != 0 {
-		vm.index = b
+		vm.jmp(b)
 		return
 	}
 	vm.index++
@@ -105,13 +117,24 @@ func (vm *VirtualMachine) jt(a uint16, b uint16) {
 // if <a> is zero, jump to <b>. Returns the destination index
 func (vm *VirtualMachine) jf(a uint16, b uint16) {
 	if a == 0 {
-		vm.index = b
+		vm.jmp(b)
 		return
 	}
 	vm.index++
 }
 
-func (vm *VirtualMachine) out(arg uint16) {
-	fmt.Printf("%c", arg)
+func (vm *VirtualMachine) out(a uint16) {
+	fmt.Printf("%c", a)
 	vm.index++
+}
+
+// jump to <a>
+func (vm *VirtualMachine) jmp(a uint16) {
+	vm.index = a
+}
+
+// write the address of the next instruction to the stack and jump to <a>
+func (vm *VirtualMachine) call(a uint16) {
+	vm.stack.push(vm.index + 1)
+	vm.jmp(a)
 }

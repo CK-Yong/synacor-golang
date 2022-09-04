@@ -1,9 +1,8 @@
 package main
 
 import (
-	"encoding/binary"
 	"fmt"
-	"io"
+	"github.com/ckyong/synacor/vm"
 	"os"
 	"path/filepath"
 )
@@ -23,29 +22,14 @@ func main() {
 		}
 	}(file)
 
-	for {
-		integer, err := readInt(file)
-		if err != nil {
-			fmt.Printf("Error: %v", err)
-			break
+	vm, err := VirtualMachine.Load(file)
+
+	memDump := vm.DumpMemory()
+
+	for _, values := range memDump {
+		for _, value := range values {
+			fmt.Printf("%v ", value)
 		}
-		if integer <= 21 {
-			println()
-		}
-		print(integer)
-		print(" ")
+		fmt.Println()
 	}
-}
-
-func readInt(file *os.File) (uint16, error) {
-	intBuff := [2]byte{}
-	_, err := io.ReadFull(file, intBuff[:])
-
-	if err != nil {
-		return 0, err
-	}
-
-	result := binary.LittleEndian.Uint16(intBuff[:])
-
-	return result, nil
 }

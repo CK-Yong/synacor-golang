@@ -7,11 +7,25 @@ import (
 	"os"
 )
 
+func (vm *VirtualMachine) DumpMemory() [32768][]uint16 {
+	result := [32768][]uint16{}
+	for address, value := range vm.memory {
+		result[address] = make([]uint16, len(value))
+		copy(result[address], value)
+	}
+	return result
+}
+
 func (vm *VirtualMachine) load(file *os.File) error {
 	index := 0
 	var args []uint16
 	for {
 		op, err := readInt(file)
+
+		if op < 21 && len(vm.memory[index]) > 0 {
+			// This is an op that needs a new line before we can continue (to prevent rewriting old bytes)
+			index++
+		}
 
 		if err != nil {
 			if err.Error() == "EOF" {
@@ -90,8 +104,8 @@ func (vm *VirtualMachine) load(file *os.File) error {
 			args = nil
 			break
 		default:
-			args = nil
-			break
+			vm.memory[index] = append(vm.memory[index], op)
+			continue
 		}
 
 		vm.memory[index] = createOpSlice(op, args...)
