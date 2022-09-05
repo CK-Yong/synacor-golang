@@ -26,10 +26,7 @@ func main() {
 
 	memDump := vm.DumpMemory()
 
-	for _, values := range memDump {
-		for _, value := range values {
-			fmt.Printf("%v ", value)
-		}
-		fmt.Println()
+	for _, value := range memDump {
+		fmt.Printf("%v\n", value)
 	}
 }

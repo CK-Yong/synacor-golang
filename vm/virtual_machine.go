@@ -156,7 +156,7 @@ func (vm *VirtualMachine) set(index uint16, b uint16) {
 
 // if <a> is nonzero, jump to <b>
 func (vm *VirtualMachine) jt(a uint16, b uint16) {
-	if a != 0 {
+	if vm.tryGetRegistryValue(a) != 0 {
 		vm.jmp(vm.tryGetRegistryValue(b))
 		return
 	}
@@ -165,7 +165,7 @@ func (vm *VirtualMachine) jt(a uint16, b uint16) {
 
 // if <a> is zero, jump to <b>. Returns the destination index
 func (vm *VirtualMachine) jf(a uint16, b uint16) {
-	if a == 0 {
+	if vm.tryGetRegistryValue(a) == 0 {
 		vm.jmp(vm.tryGetRegistryValue(b))
 		return
 	}
@@ -179,8 +179,8 @@ func (vm *VirtualMachine) out(a uint16) {
 
 // jump to <a>
 func (vm *VirtualMachine) jmp(a uint16) {
-	vm.index = vm.tryGetRegistryValue(a)
-	fmt.Printf("jmp to %v\n", vm.index)
+	newValue := vm.tryGetRegistryValue(a)
+	vm.index = newValue
 }
 
 // write the address of the next instruction to the stack and jump to <a>
