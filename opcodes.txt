@@ -1,5 +1,4 @@
-Successfully loaded file...
-21 
+21
 21 
 19 87 
 19 101 
