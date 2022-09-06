@@ -110,6 +110,7 @@ func (vm *VirtualMachine) Run() error {
 			break
 		case 5:
 			vm.gt(operands[0], operands[1], operands[2])
+			break
 		case 6: // jmp
 			vm.jmp(operands[0])
 			break
@@ -122,6 +123,12 @@ func (vm *VirtualMachine) Run() error {
 		case 9:
 			vm.add(operands[0], operands[1], operands[2])
 			break
+		case 10:
+			vm.mult(operands[0], operands[1], operands[2])
+			break
+		case 11:
+			vm.mod(operands[0], operands[1], operands[2])
+			break
 		case 12:
 			vm.and(operands[0], operands[1], operands[2])
 			break
@@ -130,6 +137,12 @@ func (vm *VirtualMachine) Run() error {
 			break
 		case 14:
 			vm.not(operands[0], operands[1])
+			break
+		case 15:
+			vm.rmem(operands[0], operands[1])
+			break
+		case 16:
+			vm.wmem(operands[0], operands[1])
 			break
 		case 17:
 			vm.call(operands[0])
@@ -190,7 +203,10 @@ func (vm *VirtualMachine) pop(a uint16) {
 func (vm *VirtualMachine) eq(a uint16, b uint16, c uint16) {
 	if vm.tryGetRegistryValue(b) == vm.tryGetRegistryValue(c) {
 		vm.write(a, 1)
+	} else {
+		vm.write(a, 0)
 	}
+
 	vm.index += 4
 }
 
@@ -201,11 +217,13 @@ func (vm *VirtualMachine) gt(a uint16, b uint16, c uint16) {
 	} else {
 		vm.write(a, 0)
 	}
+
 	vm.index += 4
 }
 
 // jump to <a>
 func (vm *VirtualMachine) jmp(a uint16) {
+	fmt.Printf("jmp from %v to %v\n", vm.index, a)
 	newValue := vm.tryGetRegistryValue(a)
 	vm.index = newValue
 }
@@ -213,7 +231,7 @@ func (vm *VirtualMachine) jmp(a uint16) {
 // if <a> is nonzero, jump to <b>
 func (vm *VirtualMachine) jt(a uint16, b uint16) {
 	if vm.tryGetRegistryValue(a) != 0 {
-		vm.jmp(vm.tryGetRegistryValue(b))
+		vm.jmp(b)
 		return
 	}
 	vm.index += 3
@@ -222,7 +240,7 @@ func (vm *VirtualMachine) jt(a uint16, b uint16) {
 // if <a> is zero, jump to <b>. Returns the destination index
 func (vm *VirtualMachine) jf(a uint16, b uint16) {
 	if vm.tryGetRegistryValue(a) == 0 {
-		vm.jmp(vm.tryGetRegistryValue(b))
+		vm.jmp(b)
 		return
 	}
 	vm.index += 3
@@ -235,24 +253,57 @@ func (vm *VirtualMachine) add(a uint16, b uint16, c uint16) {
 	vm.index += 4
 }
 
+// store into <a> the product of <b> and <c> (modulo 32768)
+func (vm *VirtualMachine) mult(a uint16, b uint16, c uint16) {
+	index, _ := tryGetRegistryAddress(a)
+	vm.register[index] = (vm.tryGetRegistryValue(b) * vm.tryGetRegistryValue(c)) % 32768
+	vm.index += 4
+}
+
+// store into <a> the remainder of <b> divided by <c>
+func (vm *VirtualMachine) mod(a uint16, b uint16, c uint16) {
+	index, _ := tryGetRegistryAddress(a)
+	vm.register[index] = vm.tryGetRegistryValue(b) % vm.tryGetRegistryValue(c)
+	vm.index += 4
+}
+
 // stores into <a> the bitwise and of <b> and <c>
 func (vm *VirtualMachine) and(a uint16, b uint16, c uint16) {
 	and := vm.tryGetRegistryValue(b) & vm.tryGetRegistryValue(c)
-	vm.write(a, vm.tryGetRegistryValue(and))
+	vm.write(a, and)
 	vm.index += 4
 }
 
 // stores into <a> the bitwise or of <b> and <c>
 func (vm *VirtualMachine) or(a uint16, b uint16, c uint16) {
 	or := vm.tryGetRegistryValue(b) | vm.tryGetRegistryValue(c)
-	vm.write(a, vm.tryGetRegistryValue(or))
+	vm.write(a, or)
 	vm.index += 4
 }
 
 // stores 15-bit bitwise inverse of <b> in <a>
 func (vm *VirtualMachine) not(a uint16, b uint16) {
-	not := ^vm.tryGetRegistryValue(b)
-	vm.write(a, vm.tryGetRegistryValue(not>>1))
+	val := vm.tryGetRegistryValue(b)
+	// Invert the number and use bitwise & to ensure you're storing a 15 bit number.
+	val = ^val & 32767
+	vm.write(a, val)
+
+	vm.index += 3
+}
+
+// read memory at address <b> and write it to <a>
+func (vm *VirtualMachine) rmem(a uint16, b uint16) {
+	if adr, isRegistry := tryGetRegistryAddress(b); isRegistry {
+		vm.write(a, vm.memory[vm.register[adr]])
+	} else {
+		vm.write(a, vm.memory[b])
+	}
+	vm.index += 3
+}
+
+// write the value from <b> into memory at address <a>
+func (vm *VirtualMachine) wmem(a uint16, b uint16) {
+	vm.memory[vm.tryGetRegistryValue(a)] = vm.tryGetRegistryValue(b)
 	vm.index += 3
 }
 
@@ -262,6 +313,7 @@ func (vm *VirtualMachine) call(a uint16) {
 	vm.jmp(a)
 }
 
+// write the character represented by ascii code <a> to the terminal
 func (vm *VirtualMachine) out(a uint16) {
 	fmt.Printf("%c", vm.tryGetRegistryValue(a))
 	vm.index += 2
