@@ -25,6 +25,21 @@ func (stack *Stack) push(arg uint16) {
 	stack.inner = append(stack.inner, arg)
 }
 
+func (stack *Stack) pop() uint16 {
+	val := stack.inner[len(stack.inner)-1]
+	stack.inner = stack.inner[:len(stack.inner)-1]
+	return val
+}
+
+// checks whether address refers to the VM registry, and writes it either to the registry or the corresponding memory address.
+func (vm *VirtualMachine) write(address uint16, val uint16) {
+	if index, ok := tryGetRegistryAddress(address); ok {
+		vm.register[index] = vm.tryGetRegistryValue(val)
+	} else {
+		vm.memory[address] = vm.tryGetRegistryValue(val)
+	}
+}
+
 func Load(file *os.File) (*VirtualMachine, error) {
 	vm := VirtualMachine{
 		memory:   [32768]uint16{},
@@ -87,6 +102,14 @@ func (vm *VirtualMachine) Run() error {
 		case 2:
 			vm.push(operands[0])
 			break
+		case 3:
+			vm.pop(operands[0])
+			break
+		case 4:
+			vm.eq(operands[0], operands[1], operands[2])
+			break
+		case 5:
+			vm.gt(operands[0], operands[1], operands[2])
 		case 6: // jmp
 			vm.jmp(operands[0])
 			break
@@ -98,6 +121,15 @@ func (vm *VirtualMachine) Run() error {
 			break
 		case 9:
 			vm.add(operands[0], operands[1], operands[2])
+			break
+		case 12:
+			vm.and(operands[0], operands[1], operands[2])
+			break
+		case 13:
+			vm.or(operands[0], operands[1], operands[2])
+			break
+		case 14:
+			vm.not(operands[0], operands[1])
 			break
 		case 17:
 			vm.call(operands[0])
@@ -135,11 +167,11 @@ func (vm *VirtualMachine) tryGetRegistryValue(arg uint16) uint16 {
 	return arg
 }
 
-// assign into <a> the sum of <b> and <c> (modulo 32768)
-func (vm *VirtualMachine) add(a uint16, b uint16, c uint16) {
-	index, _ := tryGetRegistryAddress(a)
-	vm.register[index] = (vm.tryGetRegistryValue(b) + vm.tryGetRegistryValue(c)) % 32768
-	vm.index += 4
+// set register <a> to the value of <b>
+func (vm *VirtualMachine) set(index uint16, b uint16) {
+	index, _ = tryGetRegistryAddress(index)
+	vm.register[index] = vm.tryGetRegistryValue(b)
+	vm.index += 3
 }
 
 func (vm *VirtualMachine) push(a uint16) {
@@ -147,11 +179,35 @@ func (vm *VirtualMachine) push(a uint16) {
 	vm.index += 2
 }
 
-// set register <a> to the value of <b>
-func (vm *VirtualMachine) set(index uint16, b uint16) {
-	index, _ = tryGetRegistryAddress(index)
-	vm.register[index] = vm.tryGetRegistryValue(b)
-	vm.index += 3
+// remove the top element from the stack and write it into <a>; empty stack = error
+func (vm *VirtualMachine) pop(a uint16) {
+	val := vm.stack.pop()
+	vm.write(a, val)
+	vm.index += 2
+}
+
+// set <a> to 1 if <b> is equal to <c>; set it to 0 otherwise
+func (vm *VirtualMachine) eq(a uint16, b uint16, c uint16) {
+	if vm.tryGetRegistryValue(b) == vm.tryGetRegistryValue(c) {
+		vm.write(a, 1)
+	}
+	vm.index += 4
+}
+
+// set <a> to 1 if <b> is greater than <c>; set it to 0 otherwise
+func (vm *VirtualMachine) gt(a uint16, b uint16, c uint16) {
+	if vm.tryGetRegistryValue(b) > vm.tryGetRegistryValue(c) {
+		vm.write(a, 1)
+	} else {
+		vm.write(a, 0)
+	}
+	vm.index += 4
+}
+
+// jump to <a>
+func (vm *VirtualMachine) jmp(a uint16) {
+	newValue := vm.tryGetRegistryValue(a)
+	vm.index = newValue
 }
 
 // if <a> is nonzero, jump to <b>
@@ -172,19 +228,41 @@ func (vm *VirtualMachine) jf(a uint16, b uint16) {
 	vm.index += 3
 }
 
-func (vm *VirtualMachine) out(a uint16) {
-	fmt.Printf("%c", vm.tryGetRegistryValue(a))
-	vm.index += 2
+// assign into <a> the sum of <b> and <c> (modulo 32768)
+func (vm *VirtualMachine) add(a uint16, b uint16, c uint16) {
+	index, _ := tryGetRegistryAddress(a)
+	vm.register[index] = (vm.tryGetRegistryValue(b) + vm.tryGetRegistryValue(c)) % 32768
+	vm.index += 4
 }
 
-// jump to <a>
-func (vm *VirtualMachine) jmp(a uint16) {
-	newValue := vm.tryGetRegistryValue(a)
-	vm.index = newValue
+// stores into <a> the bitwise and of <b> and <c>
+func (vm *VirtualMachine) and(a uint16, b uint16, c uint16) {
+	and := vm.tryGetRegistryValue(b) & vm.tryGetRegistryValue(c)
+	vm.write(a, vm.tryGetRegistryValue(and))
+	vm.index += 4
+}
+
+// stores into <a> the bitwise or of <b> and <c>
+func (vm *VirtualMachine) or(a uint16, b uint16, c uint16) {
+	or := vm.tryGetRegistryValue(b) | vm.tryGetRegistryValue(c)
+	vm.write(a, vm.tryGetRegistryValue(or))
+	vm.index += 4
+}
+
+// stores 15-bit bitwise inverse of <b> in <a>
+func (vm *VirtualMachine) not(a uint16, b uint16) {
+	not := ^vm.tryGetRegistryValue(b)
+	vm.write(a, vm.tryGetRegistryValue(not>>1))
+	vm.index += 3
 }
 
 // write the address of the next instruction to the stack and jump to <a>
 func (vm *VirtualMachine) call(a uint16) {
 	vm.stack.push(vm.index + 2)
-	vm.jmp(vm.tryGetRegistryValue(a))
+	vm.jmp(a)
+}
+
+func (vm *VirtualMachine) out(a uint16) {
+	fmt.Printf("%c", vm.tryGetRegistryValue(a))
+	vm.index += 2
 }
