@@ -33,6 +33,12 @@ func (stack *Stack) push(arg uint16) {
 	stack.inner = append(stack.inner, arg)
 }
 
+type EmptyStackError struct{}
+
+func (err *EmptyStackError) Error() string {
+	return "Stack is empty, application should halt"
+}
+
 // Returns the value from the top of the stack. If a value is returned from the stack, also returns true, otherwise false.
 func (stack *Stack) pop() (uint16, error) {
 	if len(stack.inner) == 0 {
@@ -214,12 +220,6 @@ func (vm *VirtualMachine) set(index uint16, b uint16) {
 func (vm *VirtualMachine) push(a uint16) {
 	vm.stack.push(vm.tryGetRegistryValue(a))
 	vm.index += 2
-}
-
-type EmptyStackError struct{}
-
-func (err *EmptyStackError) Error() string {
-	return "Stack is empty, application should halt"
 }
 
 // remove the top element from the stack and write it into <a>; empty stack = error
