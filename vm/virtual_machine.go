@@ -1,9 +1,16 @@
 package VirtualMachine
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 )
+
+// todo:
+// Improvements:
+// 	- Make switch/case into a hashmap of functions
+//	- Make registry into a hashmap starting from 32768 to 32775 (so there's no need for conversions)
+// 	- Add unit tests for all ops
 
 type VirtualMachine struct {
 	// 15 bit address space memory
@@ -13,8 +20,9 @@ type VirtualMachine struct {
 	// Unbounded stack
 	stack Stack
 	// Program counter
-	index  uint16
-	opArgs map[uint16]uint16
+	index       uint16
+	opArgs      map[uint16]uint16
+	inputBuffer []byte
 }
 
 type Stack struct {
@@ -25,10 +33,15 @@ func (stack *Stack) push(arg uint16) {
 	stack.inner = append(stack.inner, arg)
 }
 
-func (stack *Stack) pop() uint16 {
+// Returns the value from the top of the stack. If a value is returned from the stack, also returns true, otherwise false.
+func (stack *Stack) pop() (uint16, error) {
+	if len(stack.inner) == 0 {
+		return 0, &EmptyStackError{}
+	}
+
 	val := stack.inner[len(stack.inner)-1]
 	stack.inner = stack.inner[:len(stack.inner)-1]
-	return val
+	return val, nil
 }
 
 // checks whether address refers to the VM registry, and writes it either to the registry or the corresponding memory address.
@@ -69,6 +82,7 @@ func Load(file *os.File) (*VirtualMachine, error) {
 			20: 1,
 			21: 0,
 		},
+		inputBuffer: []byte{},
 	}
 	err := vm.load(file)
 
@@ -103,7 +117,9 @@ func (vm *VirtualMachine) Run() error {
 			vm.push(operands[0])
 			break
 		case 3:
-			vm.pop(operands[0])
+			if err := vm.pop(operands[0]); err != nil {
+				return err
+			}
 			break
 		case 4:
 			vm.eq(operands[0], operands[1], operands[2])
@@ -147,8 +163,16 @@ func (vm *VirtualMachine) Run() error {
 		case 17:
 			vm.call(operands[0])
 			break
+		case 18:
+			if err := vm.ret(); err != nil {
+				return err
+			}
+			break
 		case 19:
 			vm.out(operands[0])
+			break
+		case 20:
+			vm.in(operands[0])
 			break
 		case 21: // no-op
 			vm.index++
@@ -192,11 +216,23 @@ func (vm *VirtualMachine) push(a uint16) {
 	vm.index += 2
 }
 
+type EmptyStackError struct{}
+
+func (err *EmptyStackError) Error() string {
+	return "Stack is empty, application should halt"
+}
+
 // remove the top element from the stack and write it into <a>; empty stack = error
-func (vm *VirtualMachine) pop(a uint16) {
-	val := vm.stack.pop()
+func (vm *VirtualMachine) pop(a uint16) error {
+	val, err := vm.stack.pop()
+
+	if err != nil {
+		return err
+	}
+
 	vm.write(a, val)
 	vm.index += 2
+	return nil
 }
 
 // set <a> to 1 if <b> is equal to <c>; set it to 0 otherwise
@@ -223,7 +259,6 @@ func (vm *VirtualMachine) gt(a uint16, b uint16, c uint16) {
 
 // jump to <a>
 func (vm *VirtualMachine) jmp(a uint16) {
-	fmt.Printf("jmp from %v to %v\n", vm.index, a)
 	newValue := vm.tryGetRegistryValue(a)
 	vm.index = newValue
 }
@@ -293,11 +328,14 @@ func (vm *VirtualMachine) not(a uint16, b uint16) {
 
 // read memory at address <b> and write it to <a>
 func (vm *VirtualMachine) rmem(a uint16, b uint16) {
+	var val uint16
 	if adr, isRegistry := tryGetRegistryAddress(b); isRegistry {
-		vm.write(a, vm.memory[vm.register[adr]])
+		val = vm.memory[vm.register[adr]]
 	} else {
-		vm.write(a, vm.memory[b])
+		val = vm.memory[b]
 	}
+
+	vm.write(a, val)
 	vm.index += 3
 }
 
@@ -311,6 +349,38 @@ func (vm *VirtualMachine) wmem(a uint16, b uint16) {
 func (vm *VirtualMachine) call(a uint16) {
 	vm.stack.push(vm.index + 2)
 	vm.jmp(a)
+}
+
+// remove the top element from the stack and jump to it; empty stack = halt
+func (vm *VirtualMachine) ret() error {
+	val, err := vm.stack.pop()
+
+	if err != nil {
+		return err
+	}
+
+	vm.jmp(val)
+	return nil
+}
+
+// read a character from the terminal and write its ascii code to <a>
+func (vm *VirtualMachine) in(a uint16) {
+	if len(vm.inputBuffer) == 0 {
+		reader := bufio.NewReader(os.Stdin)
+		buffer, err := reader.ReadBytes('\n')
+
+		if err != nil {
+			fmt.Println("Could not read keyboard input.")
+			panic(err)
+		}
+
+		vm.inputBuffer = buffer
+	}
+
+	vm.write(a, uint16(vm.inputBuffer[0]))
+	vm.inputBuffer = vm.inputBuffer[1:]
+
+	vm.index += 2
 }
 
 // write the character represented by ascii code <a> to the terminal
