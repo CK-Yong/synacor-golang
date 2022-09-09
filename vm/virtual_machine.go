@@ -2,8 +2,12 @@ package VirtualMachine
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
+	"log"
 	"os"
+	"strconv"
+	"strings"
 )
 
 // todo:
@@ -13,14 +17,14 @@ import (
 // 	- Add unit tests for all ops
 
 type VirtualMachine struct {
-	// 15 bit address space memory
-	memory [32768]uint16
+	// 15 bit address space Memory
+	Memory [32768]uint16 `json:"memory"`
 	// Register set with 8 slots
-	register [8]uint16
-	// Unbounded stack
-	stack Stack
+	Register [8]uint16 `json:"register"`
+	// Unbounded Stack
+	Stack Stack `json:"stack"`
 	// Program counter
-	index       uint16
+	Index       uint16 `json:"index"`
 	opArgs      map[uint16]uint16
 	inputBuffer []byte
 }
@@ -50,20 +54,20 @@ func (stack *Stack) pop() (uint16, error) {
 	return val, nil
 }
 
-// checks whether address refers to the VM registry, and writes it either to the registry or the corresponding memory address.
+// checks whether address refers to the VM registry, and writes it either to the registry or the corresponding Memory address.
 func (vm *VirtualMachine) write(address uint16, val uint16) {
 	if index, ok := tryGetRegistryAddress(address); ok {
-		vm.register[index] = vm.tryGetRegistryValue(val)
+		vm.Register[index] = vm.tryGetRegistryValue(val)
 	} else {
-		vm.memory[address] = vm.tryGetRegistryValue(val)
+		vm.Memory[address] = vm.tryGetRegistryValue(val)
 	}
 }
 
 func Load(file *os.File) (*VirtualMachine, error) {
 	vm := VirtualMachine{
-		memory:   [32768]uint16{},
-		register: [8]uint16{},
-		stack:    Stack{inner: []uint16{}},
+		Memory:   [32768]uint16{},
+		Register: [8]uint16{},
+		Stack:    Stack{inner: []uint16{}},
 		opArgs: map[uint16]uint16{
 			0:  0,
 			1:  2,
@@ -101,16 +105,22 @@ func Load(file *os.File) (*VirtualMachine, error) {
 
 func (vm *VirtualMachine) Run() error {
 	defer func() {
-		fmt.Printf("Fault index: %v\n", vm.index)
+		fmt.Printf("Fault index: %v\n", vm.Index)
 	}()
 
 	for {
-		op := vm.memory[vm.index]
+		op := vm.Memory[vm.Index]
 
 		// Prepare operands, get from registry if necessary
 		var operands []uint16
 		if vm.opArgs[op] > 0 {
-			operands = vm.memory[vm.index+1 : vm.index+vm.opArgs[op]+1]
+			operands = vm.Memory[vm.Index+1 : vm.Index+vm.opArgs[op]+1]
+		}
+
+		for _, operand := range operands {
+			if operand == 32775 {
+				fmt.Printf("%v - R8: %v %v\n", vm.Index, op, operands)
+			}
 		}
 
 		switch op {
@@ -181,11 +191,11 @@ func (vm *VirtualMachine) Run() error {
 			vm.in(operands[0])
 			break
 		case 21: // no-op
-			vm.index++
+			vm.Index++
 			break
 		default:
-			fmt.Printf("Unknown operation: %v at index %v\n", op, vm.index)
-			vm.index++
+			fmt.Printf("Unknown operation: %v at index %v\n", op, vm.Index)
+			vm.Index++
 		}
 	}
 }
@@ -204,34 +214,34 @@ func (vm *VirtualMachine) tryGetRegistryValue(arg uint16) uint16 {
 	index, isRegistry := tryGetRegistryAddress(arg)
 
 	if isRegistry {
-		return vm.register[index]
+		return vm.Register[index]
 	}
 
 	return arg
 }
 
-// set register <a> to the value of <b>
+// set Register <a> to the value of <b>
 func (vm *VirtualMachine) set(index uint16, b uint16) {
 	index, _ = tryGetRegistryAddress(index)
-	vm.register[index] = vm.tryGetRegistryValue(b)
-	vm.index += 3
+	vm.Register[index] = vm.tryGetRegistryValue(b)
+	vm.Index += 3
 }
 
 func (vm *VirtualMachine) push(a uint16) {
-	vm.stack.push(vm.tryGetRegistryValue(a))
-	vm.index += 2
+	vm.Stack.push(vm.tryGetRegistryValue(a))
+	vm.Index += 2
 }
 
-// remove the top element from the stack and write it into <a>; empty stack = error
+// remove the top element from the Stack and write it into <a>; empty Stack = error
 func (vm *VirtualMachine) pop(a uint16) error {
-	val, err := vm.stack.pop()
+	val, err := vm.Stack.pop()
 
 	if err != nil {
 		return err
 	}
 
 	vm.write(a, val)
-	vm.index += 2
+	vm.Index += 2
 	return nil
 }
 
@@ -243,7 +253,7 @@ func (vm *VirtualMachine) eq(a uint16, b uint16, c uint16) {
 		vm.write(a, 0)
 	}
 
-	vm.index += 4
+	vm.Index += 4
 }
 
 // set <a> to 1 if <b> is greater than <c>; set it to 0 otherwise
@@ -254,13 +264,13 @@ func (vm *VirtualMachine) gt(a uint16, b uint16, c uint16) {
 		vm.write(a, 0)
 	}
 
-	vm.index += 4
+	vm.Index += 4
 }
 
 // jump to <a>
 func (vm *VirtualMachine) jmp(a uint16) {
 	newValue := vm.tryGetRegistryValue(a)
-	vm.index = newValue
+	vm.Index = newValue
 }
 
 // if <a> is nonzero, jump to <b>
@@ -269,51 +279,51 @@ func (vm *VirtualMachine) jt(a uint16, b uint16) {
 		vm.jmp(b)
 		return
 	}
-	vm.index += 3
+	vm.Index += 3
 }
 
-// if <a> is zero, jump to <b>. Returns the destination index
+// if <a> is zero, jump to <b>. Returns the destination Index
 func (vm *VirtualMachine) jf(a uint16, b uint16) {
 	if vm.tryGetRegistryValue(a) == 0 {
 		vm.jmp(b)
 		return
 	}
-	vm.index += 3
+	vm.Index += 3
 }
 
 // assign into <a> the sum of <b> and <c> (modulo 32768)
 func (vm *VirtualMachine) add(a uint16, b uint16, c uint16) {
 	index, _ := tryGetRegistryAddress(a)
-	vm.register[index] = (vm.tryGetRegistryValue(b) + vm.tryGetRegistryValue(c)) % 32768
-	vm.index += 4
+	vm.Register[index] = (vm.tryGetRegistryValue(b) + vm.tryGetRegistryValue(c)) % 32768
+	vm.Index += 4
 }
 
 // store into <a> the product of <b> and <c> (modulo 32768)
 func (vm *VirtualMachine) mult(a uint16, b uint16, c uint16) {
 	index, _ := tryGetRegistryAddress(a)
-	vm.register[index] = (vm.tryGetRegistryValue(b) * vm.tryGetRegistryValue(c)) % 32768
-	vm.index += 4
+	vm.Register[index] = (vm.tryGetRegistryValue(b) * vm.tryGetRegistryValue(c)) % 32768
+	vm.Index += 4
 }
 
 // store into <a> the remainder of <b> divided by <c>
 func (vm *VirtualMachine) mod(a uint16, b uint16, c uint16) {
 	index, _ := tryGetRegistryAddress(a)
-	vm.register[index] = vm.tryGetRegistryValue(b) % vm.tryGetRegistryValue(c)
-	vm.index += 4
+	vm.Register[index] = vm.tryGetRegistryValue(b) % vm.tryGetRegistryValue(c)
+	vm.Index += 4
 }
 
 // stores into <a> the bitwise and of <b> and <c>
 func (vm *VirtualMachine) and(a uint16, b uint16, c uint16) {
 	and := vm.tryGetRegistryValue(b) & vm.tryGetRegistryValue(c)
 	vm.write(a, and)
-	vm.index += 4
+	vm.Index += 4
 }
 
 // stores into <a> the bitwise or of <b> and <c>
 func (vm *VirtualMachine) or(a uint16, b uint16, c uint16) {
 	or := vm.tryGetRegistryValue(b) | vm.tryGetRegistryValue(c)
 	vm.write(a, or)
-	vm.index += 4
+	vm.Index += 4
 }
 
 // stores 15-bit bitwise inverse of <b> in <a>
@@ -323,37 +333,37 @@ func (vm *VirtualMachine) not(a uint16, b uint16) {
 	val = ^val & 32767
 	vm.write(a, val)
 
-	vm.index += 3
+	vm.Index += 3
 }
 
-// read memory at address <b> and write it to <a>
+// read Memory at address <b> and write it to <a>
 func (vm *VirtualMachine) rmem(a uint16, b uint16) {
 	var val uint16
 	if adr, isRegistry := tryGetRegistryAddress(b); isRegistry {
-		val = vm.memory[vm.register[adr]]
+		val = vm.Memory[vm.Register[adr]]
 	} else {
-		val = vm.memory[b]
+		val = vm.Memory[b]
 	}
 
 	vm.write(a, val)
-	vm.index += 3
+	vm.Index += 3
 }
 
-// write the value from <b> into memory at address <a>
+// write the value from <b> into Memory at address <a>
 func (vm *VirtualMachine) wmem(a uint16, b uint16) {
-	vm.memory[vm.tryGetRegistryValue(a)] = vm.tryGetRegistryValue(b)
-	vm.index += 3
+	vm.Memory[vm.tryGetRegistryValue(a)] = vm.tryGetRegistryValue(b)
+	vm.Index += 3
 }
 
-// write the address of the next instruction to the stack and jump to <a>
+// write the address of the next instruction to the Stack and jump to <a>
 func (vm *VirtualMachine) call(a uint16) {
-	vm.stack.push(vm.index + 2)
+	vm.Stack.push(vm.Index + 2)
 	vm.jmp(a)
 }
 
-// remove the top element from the stack and jump to it; empty stack = halt
+// remove the top element from the Stack and jump to it; empty Stack = halt
 func (vm *VirtualMachine) ret() error {
-	val, err := vm.stack.pop()
+	val, err := vm.Stack.pop()
 
 	if err != nil {
 		return err
@@ -377,14 +387,73 @@ func (vm *VirtualMachine) in(a uint16) {
 		vm.inputBuffer = buffer
 	}
 
+	// Hacks
+	strVal := string(vm.inputBuffer)
+	if strings.Contains(strVal, "set") {
+		strVal = strings.Trim(strVal, "\n")
+		integer, _ := strconv.ParseUint(strings.Split(strVal, " ")[1], 10, 16)
+		vm.Register[7] = uint16(integer)
+		vm.inputBuffer = []byte{}
+		vm.in(a)
+		return
+	}
+	if strings.Contains(strVal, "get") {
+		fmt.Printf("R8: %v\n", vm.Register[7])
+		vm.inputBuffer = []byte{}
+		vm.in(a)
+		return
+	}
+
+	// save state synacor_1
+	if strings.Contains(strVal, "save state") {
+		filePath := strings.Trim(strings.Split(strVal, " ")[2], "\n")
+		vmJson, err := json.Marshal(vm)
+
+		if err != nil {
+			log.Fatal("Could not save state", err)
+		}
+		err = os.WriteFile(filePath, vmJson, 0777)
+
+		if err != nil {
+			log.Fatal("Could not save state", err)
+		}
+		fmt.Println("Saved state to", filePath)
+
+		vm.inputBuffer = []byte{}
+		vm.in(a)
+		return
+	}
+
+	// load state synacor_1
+	if strings.Contains(strVal, "load state") {
+		filePath := strings.Trim(strings.Split(strVal, " ")[2], "\n")
+		file, err := os.ReadFile(filePath)
+
+		if err != nil {
+			log.Fatal("Could not load state", err)
+		}
+
+		err = json.Unmarshal(file, vm)
+
+		if err != nil {
+			log.Fatal("Could not load state", err)
+		}
+		fmt.Println("State loaded from", filePath)
+
+		vm.inputBuffer = []byte{}
+		vm.in(a)
+		return
+	}
+
+	// End hacks
 	vm.write(a, uint16(vm.inputBuffer[0]))
 	vm.inputBuffer = vm.inputBuffer[1:]
 
-	vm.index += 2
+	vm.Index += 2
 }
 
 // write the character represented by ascii code <a> to the terminal
 func (vm *VirtualMachine) out(a uint16) {
 	fmt.Printf("%c", vm.tryGetRegistryValue(a))
-	vm.index += 2
+	vm.Index += 2
 }

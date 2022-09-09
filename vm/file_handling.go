@@ -9,7 +9,7 @@ import (
 
 func (vm *VirtualMachine) DumpMemory() [32768]uint16 {
 	result := [32768]uint16{}
-	for address, value := range vm.memory {
+	for address, value := range vm.Memory {
 		result[address] = value
 	}
 	return result
@@ -29,7 +29,7 @@ func (vm *VirtualMachine) load(file *os.File) error {
 			}
 		}
 
-		vm.memory[index] = num
+		vm.Memory[index] = num
 		index++
 	}
 }
