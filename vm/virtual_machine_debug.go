@@ -6,7 +6,8 @@ import (
 )
 
 type VirtualMachineDebugger struct {
-	inner *VirtualMachine
+	inner     *VirtualMachine
+	outputLog bool
 }
 
 func LoadDebugger(file *os.File) (*VirtualMachineDebugger, error) {
@@ -112,6 +113,10 @@ func (vm *VirtualMachineDebugger) Run() error {
 }
 
 func (vm *VirtualMachineDebugger) print(op string, args ...uint16) {
+	if !vm.outputLog {
+		return
+	}
+
 	fmt.Printf("%v: %v ", vm.inner.Index, op)
 	for _, arg := range args {
 		fmt.Printf("%v ", arg)
@@ -228,6 +233,7 @@ func (vm *VirtualMachineDebugger) ret() error {
 
 // read a character from the terminal and write its ascii code to <a>
 func (vm *VirtualMachineDebugger) in(a uint16) {
+	vm.outputLog = true
 	vm.print("in", a)
 	vm.inner.in(a)
 }
