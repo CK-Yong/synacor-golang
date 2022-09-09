@@ -117,12 +117,6 @@ func (vm *VirtualMachine) Run() error {
 			operands = vm.Memory[vm.Index+1 : vm.Index+vm.opArgs[op]+1]
 		}
 
-		for _, operand := range operands {
-			if operand == 32775 {
-				fmt.Printf("%v - R8: %v %v\n", vm.Index, op, operands)
-			}
-		}
-
 		switch op {
 		case 0: // stop
 			return nil

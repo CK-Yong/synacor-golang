@@ -51,9 +51,16 @@ func main() {
 	scanner := bufio.NewScanner(file)
 
 	for scanner.Scan() {
-		time.Sleep(time.Millisecond * 10)
+		time.Sleep(time.Millisecond)
 		console.SendLine(scanner.Text())
 	}
+
+	time.Sleep(time.Millisecond)
+	console.SendLine("load state /tmp/synacor_1")
+	time.Sleep(time.Millisecond)
+	console.SendLine("set 4")
+	time.Sleep(time.Millisecond)
+	console.SendLine("use teleporter")
 
 	if err != nil {
 		log.Fatal(err)
