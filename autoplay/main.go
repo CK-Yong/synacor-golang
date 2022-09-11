@@ -20,7 +20,7 @@ func main() {
 	}
 	defer console.Close()
 
-	cmd := exec.Command("synacorvm")
+	cmd := exec.Command("synacorvm_linux")
 	cmd.Stdin = console.Tty()
 	cmd.Stdout = console.Tty()
 	cmd.Stderr = console.Tty()
@@ -55,12 +55,12 @@ func main() {
 		console.SendLine(scanner.Text())
 	}
 
-	time.Sleep(time.Millisecond)
-	console.SendLine("load state /tmp/synacor_1")
-	time.Sleep(time.Millisecond)
-	console.SendLine("set 4")
-	time.Sleep(time.Millisecond)
-	console.SendLine("use teleporter")
+	//time.Sleep(time.Millisecond)
+	//console.SendLine("load state /tmp/synacor_1")
+	//time.Sleep(time.Millisecond)
+	//console.SendLine("set 4")
+	//time.Sleep(time.Millisecond)
+	//console.SendLine("use teleporter")
 
 	if err != nil {
 		log.Fatal(err)

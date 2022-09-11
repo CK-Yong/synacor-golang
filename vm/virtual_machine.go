@@ -14,7 +14,7 @@ import (
 // Improvements:
 // 	- Make switch/case into a hashmap of functions
 //	- Make registry into a hashmap starting from 32768 to 32775 (so there's no need for conversions)
-// 	- Add unit tests for all ops
+// 	- Add unit tests for all commands
 
 type VirtualMachine struct {
 	// 15 bit address space Memory
@@ -108,6 +108,100 @@ func (vm *VirtualMachine) Run() error {
 		fmt.Printf("Fault index: %v\n", vm.Index)
 	}()
 
+	commands := map[uint16]func(operands []uint16) error{
+		0: func(operands []uint16) error {
+			return nil
+		},
+		1: func(operands []uint16) error {
+			vm.set(operands[0], operands[1])
+			return nil
+		},
+		2: func(operands []uint16) error {
+			vm.push(operands[0])
+			return nil
+		},
+		3: func(operands []uint16) error {
+			if err := vm.pop(operands[0]); err != nil {
+				return err
+			}
+			return nil
+		},
+		4: func(operands []uint16) error {
+			vm.eq(operands[0], operands[1], operands[2])
+			return nil
+		},
+		5: func(operands []uint16) error {
+			vm.gt(operands[0], operands[1], operands[2])
+			return nil
+		},
+		6: func(operands []uint16) error {
+			vm.jmp(operands[0])
+			return nil
+		},
+		7: func(operands []uint16) error {
+			vm.jt(operands[0], operands[1])
+			return nil
+		},
+		8: func(operands []uint16) error {
+			vm.jf(operands[0], operands[1])
+			return nil
+		},
+		9: func(operands []uint16) error {
+			vm.add(operands[0], operands[1], operands[2])
+			return nil
+		},
+		10: func(operands []uint16) error {
+			vm.mult(operands[0], operands[1], operands[2])
+			return nil
+		},
+		11: func(operands []uint16) error {
+			vm.mod(operands[0], operands[1], operands[2])
+			return nil
+		},
+		12: func(operands []uint16) error {
+			vm.and(operands[0], operands[1], operands[2])
+			return nil
+		},
+		13: func(operands []uint16) error {
+			vm.or(operands[0], operands[1], operands[2])
+			return nil
+		},
+		14: func(operands []uint16) error {
+			vm.not(operands[0], operands[1])
+			return nil
+		},
+		15: func(operands []uint16) error {
+			vm.rmem(operands[0], operands[1])
+			return nil
+		},
+		16: func(operands []uint16) error {
+			vm.wmem(operands[0], operands[1])
+			return nil
+		},
+		17: func(operands []uint16) error {
+			vm.call(operands[0])
+			return nil
+		},
+		18: func(operands []uint16) error {
+			if err := vm.ret(); err != nil {
+				return err
+			}
+			return nil
+		},
+		19: func(operands []uint16) error {
+			vm.out(operands[0])
+			return nil
+		},
+		20: func(operands []uint16) error {
+			vm.in(operands[0])
+			return nil
+		},
+		21: func(operands []uint16) error { // no-op
+			vm.Index++
+			return nil
+		},
+	}
+
 	for {
 		op := vm.Memory[vm.Index]
 
@@ -117,79 +211,10 @@ func (vm *VirtualMachine) Run() error {
 			operands = vm.Memory[vm.Index+1 : vm.Index+vm.opArgs[op]+1]
 		}
 
-		switch op {
-		case 0: // stop
-			return nil
-		case 1:
-			vm.set(operands[0], operands[1])
-			break
-		case 2:
-			vm.push(operands[0])
-			break
-		case 3:
-			if err := vm.pop(operands[0]); err != nil {
-				return err
-			}
-			break
-		case 4:
-			vm.eq(operands[0], operands[1], operands[2])
-			break
-		case 5:
-			vm.gt(operands[0], operands[1], operands[2])
-			break
-		case 6: // jmp
-			vm.jmp(operands[0])
-			break
-		case 7:
-			vm.jt(operands[0], operands[1])
-			break
-		case 8:
-			vm.jf(operands[0], operands[1])
-			break
-		case 9:
-			vm.add(operands[0], operands[1], operands[2])
-			break
-		case 10:
-			vm.mult(operands[0], operands[1], operands[2])
-			break
-		case 11:
-			vm.mod(operands[0], operands[1], operands[2])
-			break
-		case 12:
-			vm.and(operands[0], operands[1], operands[2])
-			break
-		case 13:
-			vm.or(operands[0], operands[1], operands[2])
-			break
-		case 14:
-			vm.not(operands[0], operands[1])
-			break
-		case 15:
-			vm.rmem(operands[0], operands[1])
-			break
-		case 16:
-			vm.wmem(operands[0], operands[1])
-			break
-		case 17:
-			vm.call(operands[0])
-			break
-		case 18:
-			if err := vm.ret(); err != nil {
-				return err
-			}
-			break
-		case 19:
-			vm.out(operands[0])
-			break
-		case 20:
-			vm.in(operands[0])
-			break
-		case 21: // no-op
-			vm.Index++
-			break
-		default:
-			fmt.Printf("Unknown operation: %v at index %v\n", op, vm.Index)
-			vm.Index++
+		err := commands[op](operands)
+
+		if err != nil {
+			return err
 		}
 	}
 }

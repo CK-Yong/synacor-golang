@@ -117,7 +117,7 @@ func (vm *VirtualMachineDebugger) print(op string, args ...uint16) {
 		return
 	}
 
-	fmt.Println("vmreg:", vm.inner.Register)
+	fmt.Println("vmreg:", vm.inner.Register, "vmstack", vm.inner.Stack.inner)
 
 	fmt.Printf("%v: %v ", vm.inner.Index, op)
 	for _, arg := range args {
