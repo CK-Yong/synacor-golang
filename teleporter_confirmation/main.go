@@ -10,8 +10,8 @@ type Register struct {
 
 func main() {
 
-	r0 := 4
-	r1 := 1
+	r0 := 2
+	r1 := 2
 	r8 := 0
 
 	result := runAckermannFunction(uint16(r0), uint16(r1), uint16(r8))
@@ -21,7 +21,7 @@ func main() {
 func runAckermannFunction(a uint16, b uint16, c uint16) uint16 {
 	if a != 0 {
 		if b != 0 {
-			return runAckermannFunction(a-1, runAckermannFunction(a, c, c), c)
+			return runAckermannFunction(a-1, runAckermannFunction(a, b-1, c), c)
 		} else {
 			return runAckermannFunction(a-1, 1, 0)
 		}
