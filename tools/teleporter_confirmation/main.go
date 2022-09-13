@@ -57,15 +57,28 @@ Attempted solutions:
 - Using memoization --> Note: had to reduce cache for A to 5 (~1m10s), and had to recreate it for every run
 (as r7 was changing the results)
 - Adding concurrency (~41s)
-- Improving function using induction:
+- Moved cache generation out of loop, and used a 'static' template to copy an initialized array over the cache every
+run (~30s).
+- Improving function using induced function
 ```
 where a = r0, b = r1, c = r7
 f(0,b) = b + 1
 f(a,0) = f(a-1, c)
 f(a,b) = f(a-1, f(a, b-1))
 
-f(4,1) = f(4-1, f(4,1-1)) = f(3, f(4,0)) = f(3, f(4-1, c)) = f(3, f(3, c))
+inductions (with some help from the internet)
+f(1,b) = b + c + 1
+f(2,b) = (2c + 1) + b * (c + 1) --> (~7s)
+f(3,b) = f(3, b - 1)(c + 1) + (2c + 1)
+f(4,1) = f(3, f(3,c))
 ```
+From here we can generate a more efficient function
+```
+f(3,0) = f(2,c)
+f(3,b) = f(3, b - 1)(c + 1) + (2c + 1) // Add this value to the array, plug it into the value, then add to array.
+f(4,1) = f(3, f(3,c)) // After adding f(3,b) to the array, check if this calculated value equals 6
+```
+This was not much faster than just replacing f2 as the more efficient function. Rough runtime was (~6 seconds)
 */
 
 package main
@@ -77,69 +90,35 @@ import (
 )
 
 func main() {
-
-	//r0 := uint16(4)
-	//r1 := uint16(4)
-	r7 := uint16(4)
-
 	start := time.Now()
-	for ; r7 < 32768; r7++ {
-		// Always recreate cache, as r7 changes the entire scenario for each run
-		cache := make([][]int, 4) // r0 never grows more than length of 5
-		for i := range cache {
-			cache[i] = make([]int, 32768)
-			for j := range cache[i] {
-				cache[i][j] = -1
-			}
+	// Start with c = 1, as 0 is already the default teleporter state
+	cache := make([]uint16, 32768)
+	for c := uint16(1); c < 32768; c++ {
+		// Add f(3,0) = f(2,c) as the base case
+		cache[0] = f2(c, c)
+
+		// f(4,1) = f(3, f(3,c))
+		// calculate f(3,b) for every value of b
+		for b := uint16(1); b < 32768; b++ {
+			// f(3,b) = f(3, b - 1)(c + 1) + (2c + 1)
+			cache[b] = (cache[b-1]*(c+1) + 2*c + 1) % 32768
 		}
 
-		r7 := r7
-		//go func() { // Run calculations in parallel until we find a solution
-		//	result := calculate(cache, uint16(r0), uint16(r1), uint16(r7))
-		//	fmt.Printf("(4, 1, %v) = %v\n", r7, result)
-		//	if result == 6 {
-		//		fmt.Printf("Register 7: %v.\n", r7)
-		//		fmt.Printf("Finished in %s.", time.Since(start))
-		//		os.Exit(0)
-		//	}
-		//}()
+		// f(4,1) = f(3, f(3,c))
+		// The result is the f(3,c)-th spot
+		result := cache[cache[c]]
 
-		// Alternative approach: f(3, f(3, c))
-		go func() {
-			num := calculate(cache, 3, r7, r7)
-			result := calculate(cache, 3, num, r7)
-			fmt.Printf("(4, 1, %v) = %v\n", r7, result)
-			if result == 6 {
-				fmt.Printf("Register 7: %v.\n", r7)
-				fmt.Printf("Finished in %s.", time.Since(start))
-				os.Exit(0)
-			}
-		}()
+		fmt.Printf("(4, 1, %v) = %v\n", c, result)
+		if result == 6 {
+			fmt.Printf("Register 7: %v.\n", c)
+			break
+		}
 	}
+	fmt.Printf("Finished in %s.", time.Since(start))
+	os.Exit(0)
 }
 
-func calculate(cache [][]int, a uint16, b uint16, c uint16) uint16 {
-	if cache[a][b] != -1 {
-		return uint16(cache[a][b])
-	}
-
-	var result uint16
-
-	if a != 0 {
-		if b != 0 {
-			num := calculate(cache, a, b-1, c)
-			cache[a][b-1] = int(num)
-			result = calculate(cache, a-1, num, c)
-			cache[a-1][num] = int(result)
-			return result
-		} else {
-			result = calculate(cache, a-1, c, c)
-			cache[a-1][c] = int(result)
-			return result
-		}
-	} else {
-		result = (b + 1) % 32768
-		cache[a][b] = int(result)
-		return result
-	}
+// f(2,b) = (2c + 1) + b * (c + 1)
+func f2(b uint16, c uint16) uint16 {
+	return (2*c + 1 + b*(c+1)) % 32768
 }
