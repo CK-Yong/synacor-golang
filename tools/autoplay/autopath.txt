@@ -50,3 +50,26 @@ take teleporter
 use teleporter
 take business card
 take strange book
+hack teleporter
+use teleporter
+use teleporter
+north
+north
+north
+north
+north
+north
+north
+north
+north
+take orb
+north
+east
+east
+north
+west
+west
+east
+east
+east
+north

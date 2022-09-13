@@ -423,6 +423,19 @@ func (vm *VirtualMachine) in(a uint16) {
 		return
 	}
 
+	if strings.Contains(strVal, "hack teleporter") {
+		fmt.Printf("Applying hacks...")
+		vm.Register[7] = 25734
+		vm.Register[1] = 6
+		for i := 5489; i < 5495; i++ {
+			vm.Memory[i] = 21 // set to noop
+		}
+
+		vm.inputBuffer = []byte{}
+		vm.in(a)
+		return
+	}
+
 	// save state synacor_1
 	if strings.Contains(strVal, "save state") {
 		filePath := strings.Trim(strings.Split(strVal, " ")[2], "\n")

@@ -34,7 +34,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	filePath := filepath.Join("./autoplay/autopath.txt")
+	filePath := filepath.Join("./tools/autoplay/autopath.txt")
 
 	file, err := os.Open(filePath)
 	if err != nil {
